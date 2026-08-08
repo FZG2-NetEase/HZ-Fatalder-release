@@ -35,6 +35,8 @@ set -eu
 export LANG="${LANG:-zh_CN.UTF-8}"
 export LC_ALL="${LC_ALL:-zh_CN.UTF-8}"
 export LANGUAGE="${LANGUAGE:-zh_CN:zh}"
+# 让 Go 使用自身 DNS 解析器，避免 Android/Termux 的系统解析兼容问题。
+export GODEBUG="netdns=go"
 if [ -f "$PREFIX/etc/tls/cert.pem" ]; then
     export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
 elif [ -f "$PREFIX/etc/ssl/certs/ca-certificates.crt" ]; then
