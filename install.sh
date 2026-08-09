@@ -5,9 +5,14 @@ set -eu
 MIRROR='https://mirrors.tuna.tsinghua.edu.cn/termux/termux-main'
 INSTALL_DIR="$PREFIX/libexec/fatalder"
 BINARY="$INSTALL_DIR/Fatalder-cli_linux_arm64"
+COMMIT_FILE="$INSTALL_DIR/.commit"
 LAUNCHER="$PREFIX/bin/fatalder.sh"
 COMMAND="$PREFIX/bin/fatalder"
-DOWNLOAD_URL='https://github.180280.xyz/https://raw.githubusercontent.com/FZG2-NetEase/HZ-Fatalder-release/main/Fatalder-cli_linux_arm64'
+REPOSITORY='FZG2-NetEase/HZ-Fatalder-release'
+BRANCH='main'
+GITHUB_PROXY='https://github.180280.xyz/'
+DOWNLOAD_URL="${GITHUB_PROXY}https://raw.githubusercontent.com/${REPOSITORY}/${BRANCH}/Fatalder-cli_linux_arm64"
+COMMIT_API_URL="${GITHUB_PROXY}https://api.github.com/repos/${REPOSITORY}/commits/${BRANCH}"
 APT_DIR="$PREFIX/etc/apt"
 
 # 只保留清华源，避免 Termux 其他仓库配置触发逐个测速。
@@ -22,10 +27,28 @@ pkg update -y
 pkg install -y ca-certificates curl
 update-ca-certificates >/dev/null 2>&1 || true
 
-if [ ! -x "$BINARY" ]; then
+# 从 GitHub API 获取目标分支最新提交；无本地记录时一律重新安装。
+if ! latest_commit="$(curl -fsSL --retry 3 "$COMMIT_API_URL" | sed -n 's/^[[:space:]]*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' | head -n 1)"; then
+    echo "无法获取最新版本提交信息。" >&2
+    exit 1
+fi
+if [ -z "$latest_commit" ]; then
+    echo "GitHub API 返回中未找到提交信息。" >&2
+    exit 1
+fi
+
+installed_commit=''
+if [ -f "$COMMIT_FILE" ]; then
+    installed_commit="$(tr -d '\r\n' < "$COMMIT_FILE")"
+fi
+
+if [ ! -x "$BINARY" ] || [ "$installed_commit" != "$latest_commit" ]; then
     mkdir -p "$INSTALL_DIR"
+    # 更新前删除旧二进制和提交记录，避免旧文件干扰下载或版本判断。
+    rm -f "$BINARY" "$COMMIT_FILE"
     curl -fL --retry 3 -o "$BINARY" "$DOWNLOAD_URL"
     chmod 755 "$BINARY"
+    printf '%s\n' "$latest_commit" > "$COMMIT_FILE"
 fi
 
 cat > "$LAUNCHER" <<'EOF'
